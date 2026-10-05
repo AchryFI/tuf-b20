@@ -26,7 +26,7 @@
     flex-wrap: wrap;
   }
   header h1 { font-size: 18px; margin: 0; }
-  header input[type="text"] {
+  header input {
     padding: 6px 12px; border-radius: 6px; border: 1px solid #444;
     background: #222; color: #eee; width: 120px;
   }
@@ -34,50 +34,15 @@
     padding: 6px 14px; border-radius: 6px; border: none;
     background: #4CAF50; color: #fff; cursor: pointer;
   }
-  header button:disabled { background: #555; cursor: not-allowed; }
+  header button:disabled { background: #555; }
   header label {
     display: inline-flex; align-items: center; gap: 6px;
     color: #bbb; font-size: 13px;
   }
-
-  /* ---------- range 滑块自定义 ---------- */
   header input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
     width: 120px;
-    height: 6px;
-    background: #333;
-    border-radius: 3px;
-    outline: none;
-    padding: 0;
-    margin: 0;
     vertical-align: middle;
-    cursor: pointer;
   }
-  header input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    background: #4CAF50;
-    border-radius: 50%;
-    cursor: pointer;
-    margin-top: -5px;
-  }
-  header input[type="range"]::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    background: #4CAF50;
-    border-radius: 50%;
-    cursor: pointer;
-    border: none;
-  }
-  header input[type="range"]::-moz-range-track {
-    height: 6px;
-    background: #333;
-    border-radius: 3px;
-  }
-
   #status { padding: 8px 20px; color: #9aa; font-size: 13px; min-height: 18px; }
   #status.error { color: #ff5555; }
 
@@ -98,7 +63,7 @@
     overflow: hidden;
   }
 
-  /* ---------- 背景层（铺满整个画布） ---------- */
+  /* ---------- 背景层 ---------- */
   #bg-layer {
     position: absolute;
     inset: 0;
@@ -123,11 +88,7 @@
     overflow: hidden;
   }
 
-  .tp-row1 {
-    display: flex;
-    gap: 28px;
-    align-items: flex-start;
-  }
+  .tp-row1 { display: flex; gap: 28px; align-items: flex-start; }
   .tp-avatar {
     width: 130px; height: 130px;
     border-radius: 50%;
@@ -263,7 +224,7 @@
 
 <header>
   <h1>🎮 TUF Best 20</h1>
-  <input id="idInput" type="text" placeholder="TUF ID">
+  <input id="idInput" placeholder="TUF ID">
   <button id="goBtn">生成</button>
 
   <label>
@@ -301,18 +262,15 @@
 const API = 'https://tuf-b20.2758008197b.workers.dev/tuf';
 const TEST_ID = 684;
 
-/* 把 TUF 官方图片 URL 替换成走代理的 URL */
-const fixUrl = (u) => u ? u.replace('https://api.tuforums.com', API) : '';
-
 const LINE          = 4;
 const BORDER_WIDTH  = 8;
 const CORNER_RADIUS = 25;
 const GAP           = 25;
 
-const ORIGINAL_W = 213 * LINE;
-const ORIGINAL_H = 420 + LINE * 9;
-const BORDERED_W = ORIGINAL_W + 2 * BORDER_WIDTH;
-const BORDERED_H = ORIGINAL_H + 2 * BORDER_WIDTH;
+const ORIGINAL_W = 213 * LINE;               // 852
+const ORIGINAL_H = 420 + LINE * 9;           // 456
+const BORDERED_W = ORIGINAL_W + 2 * BORDER_WIDTH;   // 868
+const BORDERED_H = ORIGINAL_H + 2 * BORDER_WIDTH;   // 472
 
 const HTML_ADD_HEIGHT = 520;
 const NUM_IMAGES = 20;
@@ -320,8 +278,11 @@ const ROWS       = Math.ceil(NUM_IMAGES / LINE);
 
 const CANVAS_W = BORDERED_W * LINE + GAP * (LINE + 1);
 const CANVAS_H = BORDERED_H * ROWS + GAP * (ROWS + 1) + 380 + HTML_ADD_HEIGHT;
+const START_Y  = 350 + HTML_ADD_HEIGHT;
 
-const START_Y = 350 + HTML_ADD_HEIGHT;
+/* 默认背景 + 默认模糊 */
+const DEFAULT_BG   = './default.png';
+const DEFAULT_BLUR = 15;
 
 /* DOM */
 const idInput   = document.getElementById('idInput');
@@ -335,11 +296,11 @@ const titleEl   = document.getElementById('canvasTitle');
 const cardsEl   = document.getElementById('cardsLayer');
 const wmEl      = document.getElementById('watermark');
 
-const bgFile    = document.getElementById('bgFile');
-const bgBtn     = document.getElementById('bgBtn');
-const bgResetBtn= document.getElementById('bgResetBtn');
-const blurRange = document.getElementById('blurRange');
-const blurVal   = document.getElementById('blurVal');
+const bgFile     = document.getElementById('bgFile');
+const bgBtn      = document.getElementById('bgBtn');
+const bgResetBtn = document.getElementById('bgResetBtn');
+const blurRange  = document.getElementById('blurRange');
+const blurVal    = document.getElementById('blurVal');
 
 const setStatus = (msg, isErr=false) => {
   statusEl.innerHTML = msg;
@@ -372,7 +333,7 @@ function dedupeByLevel(passes) {
 }
 
 /* ============================================================
- *  背景层控制
+ *  背景层
  * ============================================================ */
 function applyBlur(px) {
   bgLayer.style.filter = px > 0 ? `blur(${px}px)` : 'none';
@@ -383,12 +344,14 @@ function setBackground(dataUrl) {
   if (dataUrl) {
     bgLayer.style.backgroundImage = `url(${dataUrl})`;
   } else {
-    bgLayer.style.backgroundImage = 'linear-gradient(135deg, #3a3a3a, #1e1e1e)';
+    // 默认背景：GitHub 仓库根目录的 default.png
+    bgLayer.style.backgroundImage = `url(${DEFAULT_BG})`;
   }
 }
 
 setBackground(null);
-applyBlur(15);
+applyBlur(DEFAULT_BLUR);
+blurRange.value = DEFAULT_BLUR;
 
 bgBtn.addEventListener('click', () => bgFile.click());
 bgFile.addEventListener('change', () => {
@@ -448,7 +411,7 @@ function buildChartSVG(datax, labels, colors) {
 function renderTopPanel(p, diffs) {
   const user = p.user || {};
   const name = user.nickname || user.username || p.name || 'Unknown';
-  const avatar = fixUrl(user.avatarUrl || p.pfp || '');
+  const avatar = user.avatarUrl || p.pfp || '';
   const facts = p.funFacts || {};
   const ext = facts.extremes || {};
   const counts = facts.counts || {};
@@ -479,9 +442,9 @@ function renderTopPanel(p, diffs) {
   const chartSVG = buildChartSVG(chartData, chartLabels, chartColors);
 
   const topDiffHTML = p.topDiff
-    ? `<img src="${fixUrl(p.topDiff.icon)}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
+    ? `<img src="${p.topDiff.icon}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
   const top12kDiffHTML = p.top12kDiff
-    ? `<img src="${fixUrl(p.top12kDiff.icon)}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
+    ? `<img src="${p.top12kDiff.icon}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
 
   const countryHTML = (p.country && p.country !== 'XX')
     ? `<span class="tp-country">${escapeHtml(p.country)}</span>` : '';
@@ -537,7 +500,6 @@ function renderCard(pass, index) {
   const level  = pass.level || {};
   const diff   = level.difficulty || {};
   const judges = pass.judgements || {};
-  /* 缩略图走代理 */
   const thumb  = `${API}/v2/media/thumbnail/level/${pass.levelId}`;
 
   const row = Math.floor(index / LINE);
@@ -545,7 +507,7 @@ function renderCard(pass, index) {
   const x = GAP + col * (BORDERED_W + GAP);
   const y = START_Y + GAP + row * (BORDERED_H + GAP);
 
-  const OFF = BORDER_WIDTH;
+  const OFF = BORDER_WIDTH;   // 8
 
   const card = document.createElement('div');
   card.className = 'card';
@@ -571,22 +533,26 @@ function renderCard(pass, index) {
 
   const mainText = `XACC: ${xacc}% / Score: ${score}`;
   const addScore = (0.9 ** index) * parseFloat(pass.scoreV2 || 0);
-  const extraText = `(+${addScore.toFixed(2)})`;
+  const extraText = ` (+${addScore.toFixed(2)})`;
 
-  /* XACC / Score 区域 */
-  const scoreTop   = (ORIGINAL_H - 170 + OFF);
-  const scoreRight = (25 + OFF);
+  /* ---------- XACC / Score 区域（右下） ---------- */
+  // PIL: y = img.height - 170 = 286；x 靠右 margin 25
+  // 加边框偏移 8 → top = 294, right = 33
+  const scoreTop   = (ORIGINAL_H - 170 + OFF);   // 294
+  const scoreRight = (25 + OFF);                 // 33
 
+  // 半透明黑底（左右圆角）
   const scoreBg = document.createElement('div');
   scoreBg.style.position = 'absolute';
-  scoreBg.style.right = (scoreRight - 8) + 'px';
-  scoreBg.style.top   = (scoreTop - 6) + 'px';
+  scoreBg.style.right = (scoreRight - 8) + 'px';      // 25
+  scoreBg.style.top   = (scoreTop - 6) + 'px';        // 288
   scoreBg.style.padding = '4px 12px';
   scoreBg.style.background = 'rgba(0,0,0,0.5)';
-  scoreBg.style.borderRadius = '22px';
+  scoreBg.style.borderRadius = '22px';                // 左右都是圆角
   scoreBg.style.zIndex = '1';
   card.appendChild(scoreBg);
 
+  // 文字容器（整段一起靠右）
   const scoreWrap = document.createElement('div');
   scoreWrap.style.position = 'absolute';
   scoreWrap.style.right = scoreRight + 'px';
@@ -612,9 +578,10 @@ function renderCard(pass, index) {
 
   card.appendChild(scoreWrap);
 
-  /* World First / Pure Perfect */
-  let leftY = 130 + OFF;
-  const leftX = 25 + OFF;
+  /* ---------- World First / Pure Perfect（左下，和 XACC 同一高度） ---------- */
+  // y = ORIGINAL_H - 170 + OFF = 294
+  let leftY = ORIGINAL_H - 170 + OFF;   // 294
+  const leftX = 25 + OFF;                // 33
 
   if (pass.isWorldsFirst) {
     const wf = document.createElement('div');
@@ -624,7 +591,7 @@ function renderCard(pass, index) {
     wf.style.color = '#FFD700';
     wf.textContent = 'World First';
     card.appendChild(wf);
-    leftY -= 47;
+    leftY -= 47;   // 如果有 Pure Perfect，往上叠
   }
   if (xacc === '100.00') {
     const pp = document.createElement('div');
@@ -636,7 +603,7 @@ function renderCard(pass, index) {
     card.appendChild(pp);
   }
 
-  /* 判定数字 */
+  /* ---------- 判定数字（左下，y = 130，保持原版） ---------- */
   const judgesEl = document.createElement('div');
   judgesEl.className = 'judges';
   judgesEl.style.left = leftX + 'px';
@@ -652,7 +619,7 @@ function renderCard(pass, index) {
   judgesEl.innerHTML = list.map(([c, v]) => `<span style="color:${c}">${v ?? 0}</span>`).join('');
   card.appendChild(judgesEl);
 
-  /* Speed */
+  /* ---------- Speed（右上） ---------- */
   const speedEl = document.createElement('div');
   speedEl.className = 'txt';
   speedEl.style.right = (25 + OFF) + 'px';
@@ -661,7 +628,7 @@ function renderCard(pass, index) {
   speedEl.textContent = `Speed: ${speed}x`;
   card.appendChild(speedEl);
 
-  /* 12K / 16K */
+  /* ---------- 12K / 16K（Speed 左边） ---------- */
   if (pass.is12K || pass.is16K) {
     const kEl = document.createElement('div');
     kEl.className = 'txt';
@@ -678,7 +645,7 @@ function renderCard(pass, index) {
 }
 
 /* ============================================================
- *  画布初始化
+ *  初始化画布
  * ============================================================ */
 function setupCanvas() {
   canvasEl.style.width  = CANVAS_W + 'px';
