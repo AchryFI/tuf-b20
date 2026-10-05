@@ -106,7 +106,6 @@
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    /* filter 通过 JS 动态设置 */
   }
 
   /* ---------- 顶部面板 ---------- */
@@ -297,10 +296,13 @@
 
 <script>
 /* ============================================================
- *  常量（照抄 best20.py）
+ *  常量
  * ============================================================ */
 const API = 'https://tuf-b20.2758008197b.workers.dev/tuf';
 const TEST_ID = 684;
+
+/* 把 TUF 官方图片 URL 替换成走代理的 URL */
+const fixUrl = (u) => u ? u.replace('https://api.tuforums.com', API) : '';
 
 const LINE          = 4;
 const BORDER_WIDTH  = 8;
@@ -446,7 +448,7 @@ function buildChartSVG(datax, labels, colors) {
 function renderTopPanel(p, diffs) {
   const user = p.user || {};
   const name = user.nickname || user.username || p.name || 'Unknown';
-  const avatar = user.avatarUrl || p.pfp || '';
+  const avatar = fixUrl(user.avatarUrl || p.pfp || '');
   const facts = p.funFacts || {};
   const ext = facts.extremes || {};
   const counts = facts.counts || {};
@@ -477,9 +479,9 @@ function renderTopPanel(p, diffs) {
   const chartSVG = buildChartSVG(chartData, chartLabels, chartColors);
 
   const topDiffHTML = p.topDiff
-    ? `<img src="${p.topDiff.icon}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
+    ? `<img src="${fixUrl(p.topDiff.icon)}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
   const top12kDiffHTML = p.top12kDiff
-    ? `<img src="${p.top12kDiff.icon}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
+    ? `<img src="${fixUrl(p.top12kDiff.icon)}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
 
   const countryHTML = (p.country && p.country !== 'XX')
     ? `<span class="tp-country">${escapeHtml(p.country)}</span>` : '';
@@ -535,7 +537,8 @@ function renderCard(pass, index) {
   const level  = pass.level || {};
   const diff   = level.difficulty || {};
   const judges = pass.judgements || {};
-  const thumb  = `https://api.tuforums.com/v2/media/thumbnail/level/${pass.levelId}`;
+  /* 缩略图走代理 */
+  const thumb  = `${API}/v2/media/thumbnail/level/${pass.levelId}`;
 
   const row = Math.floor(index / LINE);
   const col = index % LINE;
@@ -801,7 +804,5 @@ idInput.addEventListener('keydown', e => {
 });
 exportBtn.addEventListener('click', exportPNG);
 </script>
-</body>
-</html>
 </body>
 </html>
