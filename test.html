@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>TUF Best 20</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #202020;
+    color: #ddd;
+    font-family: system-ui, sans-serif;
+  }
+
+  /* ---------- 工具栏 ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: #151518;
+    position: sticky; top: 0; z-index: 100;
+    border-bottom: 1px solid #333;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header input {
+    padding: 6px 12px; border-radius: 6px; border: 1px solid #444;
+    background: #222; color: #eee; width: 120px;
+  }
+  header button {
+    padding: 6px 14px; border-radius: 6px; border: none;
+    background: #4CAF50; color: #fff; cursor: pointer;
+  }
+  header button:disabled { background: #555; }
+  header label {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #bbb; font-size: 13px;
+  }
+  header input[type="range"] {
+    width: 120px;
+    vertical-align: middle;
+  }
+  #status { padding: 8px 20px; color: #9aa; font-size: 13px; min-height: 18px; }
+  #status.error { color: #ff5555; }
+
+  /* ---------- 画布外层 ---------- */
+  #canvas-viewport {
+    width: 100%;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  /* ---------- 画布 ---------- */
+  #canvas {
+    position: relative;
+    background: #646464;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  /* ---------- 背景层（铺满整个画布） ---------- */
+  #bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    /* filter 通过 JS 动态设置 */
+  }
+
+  /* ---------- 顶部面板 ---------- */
+  #top-panel {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 900px;
+    z-index: 5;
+    background: linear-gradient(180deg, rgba(10,10,15,0.85), rgba(15,15,20,0.75));
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 32px 0;
+    overflow: hidden;
+  }
+
+  .tp-row1 {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+  }
+  .tp-avatar {
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #4CAF50;
+    flex-shrink: 0;
+  }
+  .tp-id-block { flex: 1; min-width: 0; }
+  .tp-name { font-size: 36px; font-weight: 800; color: #fff; line-height: 1.2; }
+  .tp-id { font-size: 16px; color: #888; margin-top: 4px; }
+  .tp-rank { font-size: 22px; font-weight: 700; margin-top: 6px; color: #0f0; }
+  .tp-country { display: inline-block; color: #ff4614; font-size: 18px; margin-left: 12px; }
+  .tp-top-diffs { display: flex; gap: 16px; align-items: center; margin-top: 12px; }
+  .tp-top-diffs img { width: 56px; height: 56px; }
+
+  .tp-stats {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px 30px;
+    margin-top: 20px;
+    font-size: 18px;
+  }
+  .tp-stats .lbl { color: #9aa; }
+  .tp-stats .val { color: #4CAF50; font-weight: 700; }
+
+  .tp-row3 {
+    display: flex;
+    gap: 40px;
+    margin-top: 20px;
+    flex: 1;
+    min-height: 0;
+  }
+  .tp-side {
+    width: 620px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 20px;
+  }
+  .tp-side-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+  }
+  .tp-side-row .lbl { color: #bbb; }
+  .tp-side-row .val { color: #4CAF50; font-weight: 700; }
+
+  .tp-chart { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .tp-chart-title { font-size: 18px; color: #bbb; margin-bottom: 6px; }
+  .tp-chart-svg { width: 100%; height: 280px; }
+  .tp-chart-svg text { fill: #bbb; font-size: 14px; font-family: system-ui, sans-serif; }
+
+  /* ---------- 标题 ---------- */
+  .canvas-title {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-size: 48px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000;
+    z-index: 6;
+    pointer-events: none;
+  }
+
+  /* ---------- 卡片 ---------- */
+  .card {
+    position: absolute;
+    overflow: hidden;
+    z-index: 2;
+  }
+  .card .thumb {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+  .card .txt {
+    position: absolute;
+    font-size: 27px;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000;
+    z-index: 2;
+    white-space: nowrap;
+    line-height: 1;
+  }
+  .card .score-bg {
+    position: absolute;
+    background: rgba(0,0,0,0.5);
+    border-radius: 22px;
+    z-index: 1;
+  }
+  .card .judges {
+    position: absolute;
+    left: 25px;
+    top: 130px;
+    font-size: 27px;
+    font-weight: 600;
+    z-index: 3;
+    white-space: nowrap;
+    line-height: 1;
+    text-shadow: 2px 2px 0 #000;
+  }
+  .card .judges span { margin-right: 8px; }
+
+  #watermark {
+    position: absolute;
+    font-size: 20px;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000;
+    z-index: 7;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #555; border-top-color: #4CAF50;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎮 TUF Best 20</h1>
+  <input id="idInput" placeholder="TUF ID">
+  <button id="goBtn">生成</button>
+
+  <!-- 背景上传 -->
+  <label>
+    🖼️ 背景
+    <input type="file" id="bgFile" accept="image/*" style="display:none">
+    <button id="bgBtn" type="button" style="background:#2196F3">上传</button>
+  </label>
+  <button id="bgResetBtn" type="button" style="background:#666">重置</button>
+
+  <!-- 模糊程度 -->
+  <label>
+    模糊
+    <input type="range" id="blurRange" min="0" max="40" value="15" step="1">
+    <span id="blurVal" style="color:#4CAF50;width:30px;display:inline-block">15</span>
+  </label>
+
+  <button id="exportBtn" disabled>📷 导出 PNG</button>
+</header>
+
+<div id="status"></div>
+
+<div id="canvas-viewport">
+  <div id="canvas">
+    <div id="bg-layer"></div>
+    <div id="top-panel"></div>
+    <div class="canvas-title" id="canvasTitle">Best 20</div>
+    <div id="cardsLayer"></div>
+    <div id="watermark"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+ *  常量
+ * ============================================================ */
+const API = 'https://api.tuforums.com';
+const TEST_ID = 684;
+
+const LINE          = 4;
+const BORDER_WIDTH  = 8;
+const CORNER_RADIUS = 25;
+const GAP           = 25;
+
+const ORIGINAL_W = 213 * LINE;
+const ORIGINAL_H = 420 + LINE * 9;
+const BORDERED_W = ORIGINAL_W + 2 * BORDER_WIDTH;
+const BORDERED_H = ORIGINAL_H + 2 * BORDER_WIDTH;
+
+const HTML_ADD_HEIGHT = 520;
+const NUM_IMAGES = 20;
+const ROWS       = Math.ceil(NUM_IMAGES / LINE);
+
+const CANVAS_W = BORDERED_W * LINE + GAP * (LINE + 1);
+const CANVAS_H = BORDERED_H * ROWS + GAP * (ROWS + 1) + 380 + HTML_ADD_HEIGHT;
+
+const START_Y = 350 + HTML_ADD_HEIGHT;
+
+/* DOM */
+const idInput   = document.getElementById('idInput');
+const goBtn     = document.getElementById('goBtn');
+const exportBtn = document.getElementById('exportBtn');
+const statusEl  = document.getElementById('status');
+const canvasEl  = document.getElementById('canvas');
+const bgLayer   = document.getElementById('bg-layer');
+const topPanel  = document.getElementById('top-panel');
+const titleEl   = document.getElementById('canvasTitle');
+const cardsEl   = document.getElementById('cardsLayer');
+const wmEl      = document.getElementById('watermark');
+
+const bgFile    = document.getElementById('bgFile');
+const bgBtn     = document.getElementById('bgBtn');
+const bgResetBtn= document.getElementById('bgResetBtn');
+const blurRange = document.getElementById('blurRange');
+const blurVal   = document.getElementById('blurVal');
+
+const setStatus = (msg, isErr=false) => {
+  statusEl.innerHTML = msg;
+  statusEl.className = isErr ? 'error' : '';
+};
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
+  return r.json();
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+async function fetchProfile(id) { return getJSON(`${API}/v3/players/${id}/profile`); }
+async function fetchPasses(id, sortBy = 'score') {
+  const r = await getJSON(`${API}/v3/players/${id}/passes?limit=100&offset=0&sortBy=${sortBy}&order=DESC`);
+  return r.passes || [];
+}
+async function fetchDiffs() { return getJSON(`${API}/v2/database/difficulties`); }
+function dedupeByLevel(passes) {
+  const seen = new Set(); const out = [];
+  for (const p of passes) {
+    if (!seen.has(p.levelId)) { seen.add(p.levelId); out.push(p); }
+  }
+  return out;
+}
+
+/* ============================================================
+ *  背景层控制
+ * ============================================================ */
+function applyBlur(px) {
+  bgLayer.style.filter = px > 0 ? `blur(${px}px)` : 'none';
+  blurVal.textContent = px;
+}
+
+function setBackground(dataUrl) {
+  if (dataUrl) {
+    bgLayer.style.backgroundImage = `url(${dataUrl})`;
+  } else {
+    // 默认背景：渐变灰
+    bgLayer.style.backgroundImage = 'linear-gradient(135deg, #3a3a3a, #1e1e1e)';
+  }
+}
+
+// 初始化默认背景
+setBackground(null);
+applyBlur(15);
+
+// 上传
+bgBtn.addEventListener('click', () => bgFile.click());
+bgFile.addEventListener('change', () => {
+  const f = bgFile.files?.[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')) {
+    setStatus('请上传图片文件', true);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    setBackground(reader.result);
+    setStatus('✅ 背景已更换');
+  };
+  reader.onerror = () => setStatus('读取图片失败', true);
+  reader.readAsDataURL(f);
+});
+
+// 重置
+bgResetBtn.addEventListener('click', () => {
+  bgFile.value = '';
+  setBackground(null);
+  setStatus('背景已重置');
+});
+
+// 模糊滑块
+blurRange.addEventListener('input', () => applyBlur(parseInt(blurRange.value, 10)));
+
+/* ============================================================
+ *  难度分布图
+ * ============================================================ */
+function buildChartSVG(datax, labels, colors) {
+  const barW = 8, gap = 2;
+  const maxH = 260, bottom = 150;
+  const maxV = Math.max(...datax, 1);
+  const width = datax.length * (barW + gap);
+
+  let svg = `<svg class="tp-chart-svg" viewBox="0 0 ${width} 200" preserveAspectRatio="xMinYMax meet">`;
+  datax.forEach((v, i) => {
+    const h = v !== 0 ? Math.max((v / maxV) * maxH, 1) : 0;
+    const y = bottom - h;
+    const x = i * (barW + gap);
+    const cx = x + barW / 2;
+    const color = colors[i] || '#00c896';
+    svg += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}"/>`;
+    if (i % 4 === 0) {
+      const label = labels[i] ?? i;
+      svg += `<text x="${cx}" y="170" text-anchor="middle">${label}</text>`;
+    }
+  });
+  svg += `<line x1="0" y1="${bottom}" x2="${width}" y2="${bottom}" stroke="rgba(255,255,255,0.5)"/>`;
+  svg += `</svg>`;
+  return svg;
+}
+
+/* ============================================================
+ *  顶部面板
+ * ============================================================ */
+function renderTopPanel(p, diffs) {
+  const user = p.user || {};
+  const name = user.nickname || user.username || p.name || 'Unknown';
+  const avatar = user.avatarUrl || p.pfp || '';
+  const facts = p.funFacts || {};
+  const ext = facts.extremes || {};
+  const counts = facts.counts || {};
+  const cbd = facts.clearsByDifficulty || {};
+  const cbdNoDup = facts.clearsByDifficultyNoDupes || {};
+
+  const totalSeconds = (ext.longestLevelMs || 0) / 1000;
+  const hh = Math.floor(totalSeconds / 3600);
+  const mm = Math.floor((totalSeconds % 3600) / 60);
+  const ss = (totalSeconds % 60).toFixed(1);
+  const timeStr = hh > 0 ? `${hh}h ${mm}m ${ss}s` : `${mm}m ${ss}s`;
+
+  let pNum = 0, gNum = 0, uNum = 0;
+  const pguDiffs = diffs.filter(d => d.type === 'PGU');
+  pguDiffs.forEach(d => {
+    const cnt = cbdNoDup[String(d.id)] || 0;
+    const m = /^([PGU])(\d+)$/.exec(d.name);
+    if (m) {
+      if (m[1] === 'P') pNum += cnt;
+      else if (m[1] === 'G') gNum += cnt;
+      else if (m[1] === 'U') uNum += cnt;
+    }
+  });
+
+  const chartData = pguDiffs.map(d => cbd[String(d.id)] || 0);
+  const chartLabels = pguDiffs.map(d => d.name);
+  const chartColors = pguDiffs.map(d => d.color || '#00c896');
+  const chartSVG = buildChartSVG(chartData, chartLabels, chartColors);
+
+  const topDiffHTML = p.topDiff
+    ? `<img src="${p.topDiff.icon}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
+  const top12kDiffHTML = p.top12kDiff
+    ? `<img src="${p.top12kDiff.icon}" crossorigin="anonymous" onerror="this.style.display='none'">` : '';
+
+  const countryHTML = (p.country && p.country !== 'XX')
+    ? `<span class="tp-country">${escapeHtml(p.country)}</span>` : '';
+
+  topPanel.innerHTML = `
+    <div class="tp-row1">
+      ${avatar ? `<img class="tp-avatar" src="${avatar}" crossorigin="anonymous" onerror="this.style.display='none'">` : ''}
+      <div class="tp-id-block">
+        <div class="tp-name">${escapeHtml(name)}${countryHTML}</div>
+        <div class="tp-id">#${p.id} @ ${escapeHtml(user.username || '')}</div>
+        <div class="tp-rank">Rank #${p.rankedScoreRank ?? '-'}</div>
+        <div class="tp-top-diffs">${topDiffHTML}${top12kDiffHTML}</div>
+      </div>
+    </div>
+
+    <div class="tp-stats">
+      <div><span class="lbl">Ranked Score: </span><span class="val">${(p.rankedScore ?? 0).toFixed(2)}</span></div>
+      <div><span class="lbl">Total Score V2: </span><span class="val">${(p.totalScoreV2 ?? 0).toFixed(2)}</span></div>
+      <div><span class="lbl">PP: </span><span class="val">${(p.ppScore ?? 0).toFixed(2)}</span></div>
+      <div><span class="lbl">WF Score: </span><span class="val">${(p.wfScore ?? 0).toFixed(2)}</span></div>
+      <div><span class="lbl">12K Score: </span><span class="val">${(p.score12K ?? 0).toFixed(2)}</span></div>
+      <div><span class="lbl">Worlds First: </span><span class="val">${p.worldsFirstCount ?? 0}</span></div>
+      <div><span class="lbl">Avg XACC: </span><span class="val">${((p.averageXacc ?? 0) * 100).toFixed(2)}%</span></div>
+      <div><span class="lbl">Total Passes: </span><span class="val">${p.totalPasses ?? 0}</span></div>
+      <div><span class="lbl">Universal: </span><span class="val">${p.universalPassCount ?? 0}</span></div>
+      <div><span class="lbl">Unique Levels: </span><span class="val">${counts.uniqueLevelsCleared ?? 0}</span></div>
+      <div><span class="lbl">Longest: </span><span class="val">${timeStr}</span></div>
+      <div><span class="lbl">Highest BPM: </span><span class="val">${ext.highestBpmCleared ?? 0}</span></div>
+    </div>
+
+    <div class="tp-row3">
+      <div class="tp-side">
+        <div class="tp-side-row"><span class="lbl">P</span><span class="val">${pNum}</span></div>
+        <div class="tp-side-row"><span class="lbl">G</span><span class="val">${gNum}</span></div>
+        <div class="tp-side-row"><span class="lbl">U</span><span class="val">${uNum}</span></div>
+        <div class="tp-side-row"><span class="lbl">Pure Perfect</span><span class="val">${counts.totalPurePerfectClears ?? 0}</span></div>
+        <div class="tp-side-row"><span class="lbl">12K / 16K</span><span class="val">${counts.clears12K ?? 0} / ${counts.clears16K ?? 0}</span></div>
+        <div class="tp-side-row"><span class="lbl">Best XACC</span><span class="val">${((ext.bestAccuracy ?? 0) * 100).toFixed(2)}%</span></div>
+        <div class="tp-side-row"><span class="lbl">Highest Chart</span><span class="val">${ext.highestTilecountCleared ?? 0}</span></div>
+      </div>
+      <div class="tp-chart">
+        <div class="tp-chart-title">Difficulty Distribution</div>
+        ${chartSVG}
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+ *  单张卡片
+ * ============================================================ */
+function renderCard(pass, index) {
+  const level  = pass.level || {};
+  const diff   = level.difficulty || {};
+  const judges = pass.judgements || {};
+  const thumb  = `${API}/v2/media/thumbnail/level/${pass.levelId}`;
+
+  const row = Math.floor(index / LINE);
+  const col = index % LINE;
+  const x = GAP + col * (BORDERED_W + GAP);
+  const y = START_Y + GAP + row * (BORDERED_H + GAP);
+
+  // 关键：PIL 里 add_text_to_image 用的 img 是 852×456（不含边框）
+  // 所有坐标都要 +BORDER_WIDTH 才能对到 868×472 的卡片里
+  const OFF = BORDER_WIDTH;   // 8
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.left = x + 'px';
+  card.style.top  = y + 'px';
+  card.style.width  = BORDERED_W + 'px';
+  card.style.height = BORDERED_H + 'px';
+  card.style.borderRadius = CORNER_RADIUS + 'px';
+  card.style.boxShadow = '4px 4px 12px rgba(0,0,0,0.6)';
+  card.style.background = '#1a1a1e';
+
+  const img = document.createElement('img');
+  img.className = 'thumb';
+  img.src = thumb;
+  img.crossOrigin = 'anonymous';
+  img.loading = 'lazy';
+  img.onerror = () => { img.style.display = 'none'; };
+  card.appendChild(img);
+
+  const xacc   = ((pass.accuracy ?? 0) * 100).toFixed(2);
+  const score  = (pass.scoreV2 ?? 0).toFixed(2);
+  const speed  = (pass.speed ?? 1).toFixed(1);
+
+  const mainText = `XACC: ${xacc}% / Score: ${score}`;
+  const addScore = (0.9 ** index) * parseFloat(pass.scoreV2 || 0);
+  const extraText = `(+${addScore.toFixed(2)})`;
+
+  /* ---------- XACC / Score 区域（右下） ---------- */
+  // PIL: y_position = img.height - 170  →  456 - 170 = 286
+  //       x 靠右 margin 25
+  // 网页：加边框偏移 8  →  top = 294, right = 33
+  const scoreTop   = (ORIGINAL_H - 170 + OFF);   // 294
+  const scoreRight = (25 + OFF);                 // 33
+
+  // 半透明黑底
+  const scoreBg = document.createElement('div');
+  scoreBg.style.position = 'absolute';
+  scoreBg.style.right = (scoreRight - 8) + 'px';      // 25
+  scoreBg.style.top   = (scoreTop - 6) + 'px';        // 288
+  scoreBg.style.padding = '4px 12px';
+  scoreBg.style.background = 'rgba(0,0,0,0.5)';
+  scoreBg.style.borderRadius = '22px';
+  scoreBg.style.zIndex = '1';
+  card.appendChild(scoreBg);
+
+  // 文字容器
+  const scoreWrap = document.createElement('div');
+  scoreWrap.style.position = 'absolute';
+  scoreWrap.style.right = scoreRight + 'px';
+  scoreWrap.style.top   = scoreTop + 'px';
+  scoreWrap.style.fontSize = '27px';
+  scoreWrap.style.fontWeight = '600';
+  scoreWrap.style.whiteSpace = 'nowrap';
+  scoreWrap.style.lineHeight = '1';
+  scoreWrap.style.textShadow = '2px 2px 0 #000';
+  scoreWrap.style.zIndex = '3';
+  scoreWrap.style.display = 'flex';
+  scoreWrap.style.alignItems = 'flex-start';
+
+  const mainEl = document.createElement('span');
+  mainEl.style.color = '#fff';
+  mainEl.textContent = mainText;
+  scoreWrap.appendChild(mainEl);
+
+  const extraEl = document.createElement('span');
+  extraEl.style.color = '#7CFC00';
+  extraEl.textContent = extraText;
+  scoreWrap.appendChild(extraEl);
+
+  card.appendChild(scoreWrap);
+
+  /* ---------- World First / Pure Perfect（左下） ---------- */
+  // PIL: x_position = 25, y_position = 130  →  加边框偏移 → 33, 138
+  let leftY = 130 + OFF;   // 138
+  const leftX = 25 + OFF;  // 33
+
+  if (pass.isWorldsFirst) {
+    const wf = document.createElement('div');
+    wf.className = 'txt';
+    wf.style.left = leftX + 'px';
+    wf.style.top  = leftY + 'px';
+    wf.style.color = '#FFD700';
+    wf.textContent = 'World First';
+    card.appendChild(wf);
+    leftY -= 47;
+  }
+  if (xacc === '100.00') {
+    const pp = document.createElement('div');
+    pp.className = 'txt';
+    pp.style.left = leftX + 'px';
+    pp.style.top  = leftY + 'px';
+    pp.style.color = '#0af00a';
+    pp.textContent = 'Pure Perfect';
+    card.appendChild(pp);
+  }
+
+  /* ---------- 判定数字（左下） ---------- */
+  // PIL: x_position = 25, y_position = 130  → 33, 138
+  const judgesEl = document.createElement('div');
+  judgesEl.className = 'judges';
+  judgesEl.style.left = leftX + 'px';
+  judgesEl.style.top  = (130 + OFF) + 'px';
+  const list = [
+    ['#ff4444', judges.earlyDouble],
+    ['#ff8800', judges.earlySingle],
+    ['#ffcc00', judges.ePerfect],
+    ['#44ff44', judges.perfect],
+    ['#ffcc00', judges.lPerfect],
+    ['#ff8800', judges.lateSingle],
+  ];
+  judgesEl.innerHTML = list.map(([c, v]) => `<span style="color:${c}">${v ?? 0}</span>`).join('');
+  card.appendChild(judgesEl);
+
+  /* ---------- Speed（右上） ---------- */
+  // PIL: x = img.width - 25 - 文本宽, y = 130  → 右边距 25 + 边框 8 = 33, top = 138
+  const speedEl = document.createElement('div');
+  speedEl.className = 'txt';
+  speedEl.style.right = (25 + OFF) + 'px';
+  speedEl.style.top   = (130 + OFF) + 'px';
+  speedEl.style.color = speed === '1.0' ? '#fff' : '#FFD700';
+  speedEl.textContent = `Speed: ${speed}x`;
+  card.appendChild(speedEl);
+
+  /* ---------- 12K / 16K（Speed 左边） ---------- */
+  if (pass.is12K || pass.is16K) {
+    const kEl = document.createElement('div');
+    kEl.className = 'txt';
+    kEl.style.right = (25 + OFF) + 'px';
+    kEl.style.top   = (130 + OFF) + 'px';
+    kEl.style.color = '#FFD700';
+    const speedW = speedEl.textContent.length * 15;
+    kEl.style.transform = `translateX(-${speedW + 20}px)`;
+    kEl.textContent = pass.keyCount ? `${pass.keyCount}K` : (pass.is16K ? '16K' : '12K');
+    card.appendChild(kEl);
+  }
+
+  return card;
+}
+
+/* ============================================================
+ *  初始化画布
+ * ============================================================ */
+function setupCanvas() {
+  canvasEl.style.width  = CANVAS_W + 'px';
+  canvasEl.style.height = CANVAS_H + 'px';
+  titleEl.style.top = (275 + HTML_ADD_HEIGHT) + 'px';
+  wmEl.style.bottom = '20px';
+  wmEl.style.right  = '20px';
+}
+
+/* ============================================================
+ *  主流程
+ * ============================================================ */
+async function load(id) {
+  if (!id) return;
+  goBtn.disabled = true;
+  exportBtn.disabled = true;
+  topPanel.innerHTML = '';
+  cardsEl.innerHTML = '';
+
+  setStatus('<span class="spinner"></span>加载玩家资料...');
+  try {
+    const [profile, diffs] = await Promise.all([fetchProfile(id), fetchDiffs()]);
+    renderTopPanel(profile, diffs);
+
+    setStatus('<span class="spinner"></span>加载通关记录...');
+    const raw = await fetchPasses(id, 'score');
+    const passes = dedupeByLevel(raw).slice(0, 20);
+    if (passes.length === 0) {
+      setStatus('该玩家没有任何通关记录', true);
+      return;
+    }
+
+    passes.forEach((p, i) => cardsEl.appendChild(renderCard(p, i)));
+
+    const now = new Date().toLocaleString('zh-CN', { hour12: false });
+    wmEl.textContent = `Web        ID ${id}        Query at ${now}        V4.1        Created By _Achry_ & Alas`;
+
+    setStatus(`✅ 生成完成，共 ${passes.length} 条`);
+    exportBtn.disabled = false;
+    fitToViewport();
+  } catch (e) {
+    console.error(e);
+    setStatus('❌ ' + e.message, true);
+  } finally {
+    goBtn.disabled = false;
+  }
+}
+
+function fitToViewport() {
+  const vp = document.getElementById('canvas-viewport');
+  const scaleX = (vp.clientWidth - 40) / CANVAS_W;
+  const scale = Math.min(1, scaleX);
+  canvasEl.style.transform = `scale(${scale})`;
+  canvasEl.style.transformOrigin = 'top center';
+  vp.style.height = (CANVAS_H * scale + 40) + 'px';
+}
+window.addEventListener('resize', fitToViewport);
+
+/* ============================================================
+ *  导出 PNG
+ * ============================================================ */
+async function exportPNG() {
+  exportBtn.disabled = true;
+  setStatus('<span class="spinner"></span>正在生成图片...');
+
+  try {
+    const prevTransform = canvasEl.style.transform;
+    canvasEl.style.transform = 'none';
+
+    const imgs = [...canvasEl.querySelectorAll('img')];
+    await Promise.all(imgs.map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(res => {
+        img.addEventListener('load', res, { once: true });
+        img.addEventListener('error', res, { once: true });
+      });
+    }));
+
+    const canvas = await html2canvas(canvasEl, {
+      backgroundColor: '#646464',
+      scale: 1,
+      useCORS: true,
+      allowTaint: false,
+      logging: false,
+      width: CANVAS_W,
+      height: CANVAS_H,
+      windowWidth: CANVAS_W,
+      windowHeight: CANVAS_H,
+    });
+
+    canvasEl.style.transform = prevTransform;
+
+    const a = document.createElement('a');
+    a.download = `tuf_b20_${TEST_ID}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+
+    setStatus('✅ 已导出');
+  } catch (e) {
+    console.error(e);
+    setStatus('❌ 导出失败：' + e.message, true);
+  } finally {
+    exportBtn.disabled = false;
+  }
+}
+
+/* ============================================================
+ *  启动
+ * ============================================================ */
+setupCanvas();
+
+window.addEventListener('DOMContentLoaded', () => {
+  idInput.value = TEST_ID;
+  load(TEST_ID);
+});
+
+goBtn.addEventListener('click', () => {
+  const id = idInput.value.trim();
+  if (id) load(id);
+});
+idInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') goBtn.click();
+});
+exportBtn.addEventListener('click', exportPNG);
+</script>
+</body>
+</html>
