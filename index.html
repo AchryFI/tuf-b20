@@ -26,7 +26,7 @@
     flex-wrap: wrap;
   }
   header h1 { font-size: 18px; margin: 0; }
-  header input {
+  header input[type="text"] {
     padding: 6px 12px; border-radius: 6px; border: 1px solid #444;
     background: #222; color: #eee; width: 120px;
   }
@@ -34,15 +34,50 @@
     padding: 6px 14px; border-radius: 6px; border: none;
     background: #4CAF50; color: #fff; cursor: pointer;
   }
-  header button:disabled { background: #555; }
+  header button:disabled { background: #555; cursor: not-allowed; }
   header label {
     display: inline-flex; align-items: center; gap: 6px;
     color: #bbb; font-size: 13px;
   }
+
+  /* ---------- range 滑块自定义 ---------- */
   header input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
     width: 120px;
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    outline: none;
+    padding: 0;
+    margin: 0;
     vertical-align: middle;
+    cursor: pointer;
   }
+  header input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #4CAF50;
+    border-radius: 50%;
+    cursor: pointer;
+    margin-top: -5px;
+  }
+  header input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #4CAF50;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  header input[type="range"]::-moz-range-track {
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+  }
+
   #status { padding: 8px 20px; color: #9aa; font-size: 13px; min-height: 18px; }
   #status.error { color: #ff5555; }
 
@@ -229,10 +264,9 @@
 
 <header>
   <h1>🎮 TUF Best 20</h1>
-  <input id="idInput" placeholder="TUF ID">
+  <input id="idInput" type="text" placeholder="TUF ID">
   <button id="goBtn">生成</button>
 
-  <!-- 背景上传 -->
   <label>
     🖼️ 背景
     <input type="file" id="bgFile" accept="image/*" style="display:none">
@@ -240,7 +274,6 @@
   </label>
   <button id="bgResetBtn" type="button" style="background:#666">重置</button>
 
-  <!-- 模糊程度 -->
   <label>
     模糊
     <input type="range" id="blurRange" min="0" max="40" value="15" step="1">
@@ -264,7 +297,7 @@
 
 <script>
 /* ============================================================
- *  常量
+ *  常量（照抄 best20.py）
  * ============================================================ */
 const API = 'https://tuf-b20.2758008197b.workers.dev/tuf';
 const TEST_ID = 684;
@@ -348,16 +381,13 @@ function setBackground(dataUrl) {
   if (dataUrl) {
     bgLayer.style.backgroundImage = `url(${dataUrl})`;
   } else {
-    // 默认背景：渐变灰
     bgLayer.style.backgroundImage = 'linear-gradient(135deg, #3a3a3a, #1e1e1e)';
   }
 }
 
-// 初始化默认背景
 setBackground(null);
 applyBlur(15);
 
-// 上传
 bgBtn.addEventListener('click', () => bgFile.click());
 bgFile.addEventListener('change', () => {
   const f = bgFile.files?.[0];
@@ -375,14 +405,12 @@ bgFile.addEventListener('change', () => {
   reader.readAsDataURL(f);
 });
 
-// 重置
 bgResetBtn.addEventListener('click', () => {
   bgFile.value = '';
   setBackground(null);
   setStatus('背景已重置');
 });
 
-// 模糊滑块
 blurRange.addEventListener('input', () => applyBlur(parseInt(blurRange.value, 10)));
 
 /* ============================================================
@@ -507,16 +535,14 @@ function renderCard(pass, index) {
   const level  = pass.level || {};
   const diff   = level.difficulty || {};
   const judges = pass.judgements || {};
-  const thumb  = `${API}/v2/media/thumbnail/level/${pass.levelId}`;
+  const thumb  = `https://api.tuforums.com/v2/media/thumbnail/level/${pass.levelId}`;
 
   const row = Math.floor(index / LINE);
   const col = index % LINE;
   const x = GAP + col * (BORDERED_W + GAP);
   const y = START_Y + GAP + row * (BORDERED_H + GAP);
 
-  // 关键：PIL 里 add_text_to_image 用的 img 是 852×456（不含边框）
-  // 所有坐标都要 +BORDER_WIDTH 才能对到 868×472 的卡片里
-  const OFF = BORDER_WIDTH;   // 8
+  const OFF = BORDER_WIDTH;
 
   const card = document.createElement('div');
   card.className = 'card';
@@ -544,25 +570,20 @@ function renderCard(pass, index) {
   const addScore = (0.9 ** index) * parseFloat(pass.scoreV2 || 0);
   const extraText = `(+${addScore.toFixed(2)})`;
 
-  /* ---------- XACC / Score 区域（右下） ---------- */
-  // PIL: y_position = img.height - 170  →  456 - 170 = 286
-  //       x 靠右 margin 25
-  // 网页：加边框偏移 8  →  top = 294, right = 33
-  const scoreTop   = (ORIGINAL_H - 170 + OFF);   // 294
-  const scoreRight = (25 + OFF);                 // 33
+  /* XACC / Score 区域 */
+  const scoreTop   = (ORIGINAL_H - 170 + OFF);
+  const scoreRight = (25 + OFF);
 
-  // 半透明黑底
   const scoreBg = document.createElement('div');
   scoreBg.style.position = 'absolute';
-  scoreBg.style.right = (scoreRight - 8) + 'px';      // 25
-  scoreBg.style.top   = (scoreTop - 6) + 'px';        // 288
+  scoreBg.style.right = (scoreRight - 8) + 'px';
+  scoreBg.style.top   = (scoreTop - 6) + 'px';
   scoreBg.style.padding = '4px 12px';
   scoreBg.style.background = 'rgba(0,0,0,0.5)';
   scoreBg.style.borderRadius = '22px';
   scoreBg.style.zIndex = '1';
   card.appendChild(scoreBg);
 
-  // 文字容器
   const scoreWrap = document.createElement('div');
   scoreWrap.style.position = 'absolute';
   scoreWrap.style.right = scoreRight + 'px';
@@ -588,10 +609,9 @@ function renderCard(pass, index) {
 
   card.appendChild(scoreWrap);
 
-  /* ---------- World First / Pure Perfect（左下） ---------- */
-  // PIL: x_position = 25, y_position = 130  →  加边框偏移 → 33, 138
-  let leftY = 130 + OFF;   // 138
-  const leftX = 25 + OFF;  // 33
+  /* World First / Pure Perfect */
+  let leftY = 130 + OFF;
+  const leftX = 25 + OFF;
 
   if (pass.isWorldsFirst) {
     const wf = document.createElement('div');
@@ -613,8 +633,7 @@ function renderCard(pass, index) {
     card.appendChild(pp);
   }
 
-  /* ---------- 判定数字（左下） ---------- */
-  // PIL: x_position = 25, y_position = 130  → 33, 138
+  /* 判定数字 */
   const judgesEl = document.createElement('div');
   judgesEl.className = 'judges';
   judgesEl.style.left = leftX + 'px';
@@ -630,8 +649,7 @@ function renderCard(pass, index) {
   judgesEl.innerHTML = list.map(([c, v]) => `<span style="color:${c}">${v ?? 0}</span>`).join('');
   card.appendChild(judgesEl);
 
-  /* ---------- Speed（右上） ---------- */
-  // PIL: x = img.width - 25 - 文本宽, y = 130  → 右边距 25 + 边框 8 = 33, top = 138
+  /* Speed */
   const speedEl = document.createElement('div');
   speedEl.className = 'txt';
   speedEl.style.right = (25 + OFF) + 'px';
@@ -640,7 +658,7 @@ function renderCard(pass, index) {
   speedEl.textContent = `Speed: ${speed}x`;
   card.appendChild(speedEl);
 
-  /* ---------- 12K / 16K（Speed 左边） ---------- */
+  /* 12K / 16K */
   if (pass.is12K || pass.is16K) {
     const kEl = document.createElement('div');
     kEl.className = 'txt';
@@ -657,7 +675,7 @@ function renderCard(pass, index) {
 }
 
 /* ============================================================
- *  初始化画布
+ *  画布初始化
  * ============================================================ */
 function setupCanvas() {
   canvasEl.style.width  = CANVAS_W + 'px';
@@ -783,5 +801,7 @@ idInput.addEventListener('keydown', e => {
 });
 exportBtn.addEventListener('click', exportPNG);
 </script>
+</body>
+</html>
 </body>
 </html>
